@@ -168,7 +168,8 @@ const plugins = [
       background_color: "#F8F6F3",
       display: "standalone",
       orientation: "portrait",
-      start_url: "/",
+      start_url: "/evaplant-pwa/",
+      scope: "/evaplant-pwa/",
       icons: [
         { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -203,6 +204,7 @@ export default defineConfig({
   },
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
+  base: process.env.NODE_ENV === "production" ? "/evaplant-pwa/" : "/",
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
