@@ -5,8 +5,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
+import { Router, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
@@ -23,9 +22,12 @@ import PompageWizard from "./pages/PompageWizard";
 import Contacts from "./pages/Contacts";
 import Parametres from "./pages/Parametres";
 
-function Router() {
+// Base path pour GitHub Pages
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function AppRoutes() {
   return (
-    <Switch hook={useHashLocation}>
+    <Switch>
       <Route path="/" component={Home} />
       <Route path="/operations" component={Operations} />
       {/* Suivi terrain */}
@@ -54,7 +56,9 @@ function App() {
         <AppProvider>
           <TooltipProvider>
             <Toaster position="top-center" richColors />
-            <Router />
+            <Router base={BASE}>
+              <AppRoutes />
+            </Router>
           </TooltipProvider>
         </AppProvider>
       </ThemeProvider>
