@@ -9,6 +9,7 @@ import { Home, FileText, Droplets, Users, Settings, ChevronLeft, RefreshCw, Wifi
 import { cn } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
 import { useState, useEffect } from "react";
+import { SyncStatusBadge } from "./SyncStatusBadge";
 
 function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -171,20 +172,22 @@ export default function Layout({
 
       {/* Contexte actif — bandeau sous le header (cliquable pour changer) */}
       {activeContext && (
-        <Link href="/">
-          <div
-            className="px-4 py-1.5 flex items-center gap-2 text-xs font-medium cursor-pointer hover:bg-[#005a52] transition-colors"
-            style={{ background: "#004d47", color: "#DCF21E" }}
-            title="Toucher pour changer de contexte"
-          >
+        <div
+          className="px-4 py-1.5 flex items-center gap-2 text-xs font-medium"
+          style={{ background: "#004d47", color: "#DCF21E" }}
+        >
+          <Link href="/" className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" title="Toucher pour changer de contexte">
             <span>{activeContext.client}</span>
             <span className="opacity-50">·</span>
-            <span className="opacity-80 text-white">{activeContext.site}</span>
+            <span className="opacity-80 text-white truncate">{activeContext.site}</span>
             <span className="opacity-50">·</span>
             <span className="opacity-70 text-white">{activeContext.systeme}</span>
-            <RefreshCw size={10} className="ml-auto opacity-50" />
+            <RefreshCw size={10} className="opacity-50 flex-shrink-0" />
+          </Link>
+          <div className="flex-shrink-0">
+            <SyncStatusBadge />
           </div>
-        </Link>
+        </div>
       )}
 
       {/* Contenu principal */}

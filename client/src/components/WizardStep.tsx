@@ -459,7 +459,31 @@ export function PhotoGallery({ photos, onChange, disabled, label = "Photographie
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, w, h);
             ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL("image/jpeg", 0.85));
+
+            // Compression itérative pour rester sous 1 MB
+            const MAX_BYTES = 1 * 1024 * 1024; // 1 MB
+            let quality = 0.85;
+            let dataUrl = canvas.toDataURL("image/jpeg", quality);
+            // base64 représente ~133% de la taille binaire réelle
+            while (dataUrl.length > MAX_BYTES * 1.37 && quality > 0.3) {
+              quality = Math.max(0.3, quality - 0.1);
+              dataUrl = canvas.toDataURL("image/jpeg", quality);
+            }
+            // Si toujours trop grand, réduire aussi la résolution
+            if (dataUrl.length > MAX_BYTES * 1.37) {
+              const scale = Math.sqrt((MAX_BYTES * 1.37) / dataUrl.length);
+              const w2 = Math.round(w * scale);
+              const h2 = Math.round(h * scale);
+              const canvas2 = document.createElement("canvas");
+              canvas2.width = w2;
+              canvas2.height = h2;
+              const ctx2 = canvas2.getContext("2d")!;
+              ctx2.fillStyle = "#ffffff";
+              ctx2.fillRect(0, 0, w2, h2);
+              ctx2.drawImage(canvas, 0, 0, w2, h2);
+              dataUrl = canvas2.toDataURL("image/jpeg", 0.7);
+            }
+            resolve(dataUrl);
           } catch (e) {
             // Fallback : utiliser le dataUrl original
             resolve(originalDataUrl);

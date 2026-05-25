@@ -18,6 +18,8 @@ import {
 } from "@/components/WizardStep";
 import { toast } from "sonner";
 import { autoAddPompageToExcel } from "@/lib/excelExport";
+import { generatePompagePDF } from "@/lib/pdfExport";
+import { uploadPdfToDrive } from "@/lib/googleDrive";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,22 +121,31 @@ export default function PompageWizard() {
       const finalized = { ...test, status: "completed" as const };
       await savePompage(finalized);
 
-      const { sheetsOk, sheetsError, sheetsAction, debugInfo } = await autoAddPompageToExcel(finalized);
-
+      // 1. Synchronisation Google Sheets
+      const { sheetsOk, sheetsError } = await autoAddPompageToExcel(finalized);
       if (sheetsOk) {
-        const actionLabel = sheetsAction === "updated" ? "updated" : sheetsAction === "inserted" ? "inserted" : "?";
-        const debugMsg = debugInfo
-          ? `Sync réussie — action: ${actionLabel} — reportNumber: ${debugInfo.reportNumber} — ID: ${debugInfo.reportId.substring(0, 8)}... — onglet: ${debugInfo.sheet}`
-          : "✓ Test finalisé et synchronisé dans Google Sheets";
-        toast.success(debugMsg, { duration: 8000 });
+        toast.success("✓ Test finalisé et synchronisé dans Google Sheets", { duration: 5000 });
       } else {
         toast.warning(
-          `Test finalisé localement, mais la synchronisation Google Sheets a échoué : ${sheetsError ?? "erreur inconnue"}`,
-          { duration: 8000 }
+          `Test finalisé localement — synchro Sheets échouée : ${sheetsError ?? "erreur inconnue"}`,
+          { duration: 6000 }
         );
-        console.error("[PompageWizard] Erreur synchro Sheets:", sheetsError);
       }
 
+      // 2. Génération PDF + upload automatique vers Google Drive
+      try {
+        const pdfResult = await generatePompagePDF(finalized);
+        const siteName = finalized.context?.site ?? "Autres";
+        const driveResult = await uploadPdfToDrive(pdfResult.base64, pdfResult.filename, siteName);
+        if (driveResult.success) {
+          toast.success(`☁️ PDF sauvegardé dans Google Drive (${driveResult.folderName})`, { duration: 5000 });
+        } else {
+          console.warn("[PompageWizard] Upload Drive échoué:", driveResult.error);
+        }
+      } catch (pdfErr) {
+        console.warn("[PompageWizard] Erreur PDF/Drive:", pdfErr);
+        // Non bloquant
+      }
       navigate("/pompage");
     } catch (err) {
       console.error("[PompageWizard] Erreur finalisation:", err);

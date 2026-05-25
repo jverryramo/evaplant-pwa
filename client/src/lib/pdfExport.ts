@@ -307,7 +307,12 @@ async function insertPhotos(
 // ============================================================
 // Générer le PDF d'un rapport de suivi terrain
 // ============================================================
-export async function generateSuiviPDF(report: SuiviReport): Promise<void> {
+export interface PdfResult {
+  base64: string;
+  filename: string;
+}
+
+export async function generateSuiviPDF(report: SuiviReport): Promise<PdfResult> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const logoBase64 = await loadImageBase64(RAMO_LOGO_URL);
   const pageH = doc.internal.pageSize.getHeight();
@@ -512,13 +517,18 @@ export async function generateSuiviPDF(report: SuiviReport): Promise<void> {
     drawFooter(doc, i, totalPages);
   }
 
-  doc.save(`Rapport_Suivi_${report.reportNumber}_${report.context.site.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`);
+  const filename = `Rapport_Suivi_${report.reportNumber}_${report.context.site.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+  doc.save(filename);
+  return {
+    base64: doc.output("datauristring").split(",")[1],
+    filename,
+  };
 }
 
 // ============================================================
 // Générer le PDF d'un test de pompage
 // ============================================================
-export async function generatePompagePDF(test: PompageTest): Promise<void> {
+export async function generatePompagePDF(test: PompageTest): Promise<PdfResult> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const logoBase64 = await loadImageBase64(RAMO_LOGO_URL);
   const pageH = doc.internal.pageSize.getHeight();
@@ -649,5 +659,10 @@ export async function generatePompagePDF(test: PompageTest): Promise<void> {
     drawFooter(doc, i, totalPages);
   }
 
-  doc.save(`Test_Pompage_${test.testNumber}_${test.context.site.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`);
+  const filename = `Test_Pompage_${test.testNumber}_${test.context.site.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+  doc.save(filename);
+  return {
+    base64: doc.output("datauristring").split(",")[1],
+    filename,
+  };
 }

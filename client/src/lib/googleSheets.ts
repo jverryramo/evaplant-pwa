@@ -15,7 +15,7 @@
 
 const APPS_SCRIPT_URL =
   import.meta.env.VITE_APPS_SCRIPT_URL ??
-  "https://script.google.com/macros/s/AKfycbzLI1IUIC9tHM1fv07f6DHoBxa4drKrWSzOwzcV5jUCvQBfFlLrdFOo4ET55AqD4znX/exec";
+  "https://script.google.com/macros/s/AKfycbyVIkNEFUN3xtdmjlGGoyNlYvtFTHYF_LkrZCbRo_ac0DEqTt2BOjMclyzD5IQhw5aA/exec";
 
 export type SheetsResult =
   | { success: true; message: string; action?: "updated" | "inserted"; debugInfo?: SheetsDebugInfo }

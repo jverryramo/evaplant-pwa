@@ -106,11 +106,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Fusionner les rapports suivi depuis Sheets avec les données locales
       if (suiviRows.success && suiviRows.rows.length > 0) {
         const localReports = await getAllSuiviReports();
-        const localIds = new Set(localReports.map((r) => r.reportNumber));
+        // Comparer par numéro de rapport ET par ID sheets-{num} pour éviter les doublons
+        const localReportNumbers = new Set(localReports.map((r) => r.reportNumber));
+        const localSheetIds = new Set(localReports.map((r) => r.id));
         let added = 0;
         for (const row of suiviRows.rows) {
           const num = row["Numéro"];
-          if (num && !localIds.has(num)) {
+          const sheetsId = `sheets-${num}`;
+          // Ne pas importer si le rapport existe déjà localement (par numéro ou par ID)
+          if (num && !localReportNumbers.has(num) && !localSheetIds.has(sheetsId)) {
             // Créer un rapport minimal depuis les données Sheets (sans photos)
             const sheetReport: SuiviReport = {
               id: `sheets-${num}`,
@@ -157,11 +161,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Fusionner les tests de pompage depuis Sheets
       if (pompageRows.success && pompageRows.rows.length > 0) {
         const localTests = await getAllPompageTests();
-        const localNums = new Set(localTests.map((t) => t.testNumber));
+        // Comparer par numéro ET par ID sheets-{num} pour éviter les doublons
+        const localTestNumbers = new Set(localTests.map((t) => t.testNumber));
+        const localTestSheetIds = new Set(localTests.map((t) => t.id));
         let added = 0;
         for (const row of pompageRows.rows) {
           const num = row["Numéro"];
-          if (num && !localNums.has(num)) {
+          const sheetsId = `sheets-${num}`;
+          // Ne pas importer si le test existe déjà localement (par numéro ou par ID)
+          if (num && !localTestNumbers.has(num) && !localTestSheetIds.has(sheetsId)) {
             const sheetTest: PompageTest = {
               id: `sheets-${num}`,
               testNumber: num,

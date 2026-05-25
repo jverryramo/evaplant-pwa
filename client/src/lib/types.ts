@@ -230,6 +230,7 @@ export interface SuiviReport {
   // Méta
   createdAt: string;
   updatedAt: string;
+  syncedToSheets?: boolean; // true si synchronisé avec succès vers Google Sheets
 }
 
 // ============================================================
@@ -353,6 +354,7 @@ export interface PompageTest {
   // Méta
   createdAt: string;
   updatedAt: string;
+  syncedToSheets?: boolean; // true si synchronisé avec succès vers Google Sheets
 }
 
 // ============================================================

@@ -31,6 +31,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { autoAddSuiviToExcel } from "@/lib/excelExport";
+import { generateSuiviPDF } from "@/lib/pdfExport";
+import { uploadPdfToDrive } from "@/lib/googleDrive";
 
 // Générer les étapes dynamiquement selon la configuration
 function buildSteps(nombreZones: number, nombreTensiometres: number) {
@@ -139,20 +141,30 @@ export default function SuiviWizard() {
       const finalized = { ...report, status: "completed" as const };
       await saveSuivi(finalized);
 
-      const { sheetsOk, sheetsError, sheetsAction, debugInfo } = await autoAddSuiviToExcel(finalized);
-
+      // 1. Synchronisation Google Sheets
+      const { sheetsOk, sheetsError } = await autoAddSuiviToExcel(finalized);
       if (sheetsOk) {
-        const actionLabel = sheetsAction === "updated" ? "updated" : sheetsAction === "inserted" ? "inserted" : "?";
-        const debugMsg = debugInfo
-          ? `Sync réussie — action: ${actionLabel} — reportNumber: ${debugInfo.reportNumber} — ID: ${debugInfo.reportId.substring(0, 8)}... — onglet: ${debugInfo.sheet}`
-          : "✓ Rapport finalisé et synchronisé dans Google Sheets";
-        toast.success(debugMsg, { duration: 8000 });
+        toast.success("✓ Rapport finalisé et synchronisé dans Google Sheets", { duration: 5000 });
       } else {
         toast.warning(
-          `Rapport finalisé localement, mais la synchronisation Google Sheets a échoué : ${sheetsError ?? "erreur inconnue"}`,
-          { duration: 8000 }
+          `Rapport finalisé localement — synchro Sheets échouée : ${sheetsError ?? "erreur inconnue"}`,
+          { duration: 6000 }
         );
-        console.error("[SuiviWizard] Erreur synchro Sheets:", sheetsError);
+      }
+
+      // 2. Génération PDF + upload automatique vers Google Drive
+      try {
+        const pdfResult = await generateSuiviPDF(finalized);
+        const siteName = finalized.context?.site ?? "Autres";
+        const driveResult = await uploadPdfToDrive(pdfResult.base64, pdfResult.filename, siteName);
+        if (driveResult.success) {
+          toast.success(`☁️ PDF sauvegardé dans Google Drive (${driveResult.folderName})`, { duration: 5000 });
+        } else {
+          console.warn("[SuiviWizard] Upload Drive échoué:", driveResult.error);
+        }
+      } catch (pdfErr) {
+        console.warn("[SuiviWizard] Erreur PDF/Drive:", pdfErr);
+        // Non bloquant
       }
 
       navigate("/suivi");

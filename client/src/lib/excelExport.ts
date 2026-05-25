@@ -273,6 +273,11 @@ export async function autoAddSuiviToExcel(report: SuiviReport): Promise<{ sheets
     });
   }
   const result = await sendToGoogleSheets({ type: "suivi", reportId: report.id, reportNumber: report.reportNumber, data: row });
+  // Marquer le rapport comme synchronisé si succès
+  if (result.success) {
+    const { saveSuiviReport } = await import("./db");
+    await saveSuiviReport({ ...report, syncedToSheets: true });
+  }
   return {
     sheetsOk: result.success,
     sheetsError: result.success ? undefined : result.error,
@@ -294,6 +299,11 @@ export async function autoAddPompageToExcel(test: PompageTest): Promise<{ sheets
     });
   }
   const result = await sendToGoogleSheets({ type: "pompage", reportId: test.id, reportNumber: test.testNumber, data: row });
+  // Marquer le test comme synchronisé si succès
+  if (result.success) {
+    const { savePompageTest } = await import("./db");
+    await savePompageTest({ ...test, syncedToSheets: true });
+  }
   return {
     sheetsOk: result.success,
     sheetsError: result.success ? undefined : result.error,

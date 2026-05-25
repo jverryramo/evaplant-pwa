@@ -9,6 +9,7 @@ import { Router, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
+import { useSyncOnReconnect } from "./hooks/useSyncOnReconnect";
 
 // Pages
 import Home from "./pages/Home";
@@ -22,10 +23,10 @@ import PompageWizard from "./pages/PompageWizard";
 import Contacts from "./pages/Contacts";
 import Parametres from "./pages/Parametres";
 
-// Base path pour GitHub Pages
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 function AppRoutes() {
+  // Synchronisation automatique au retour d'internet
+  useSyncOnReconnect();
+
   return (
     <Switch>
       <Route path="/" component={Home} />
@@ -56,7 +57,7 @@ function App() {
         <AppProvider>
           <TooltipProvider>
             <Toaster position="top-center" richColors />
-            <Router base={BASE}>
+            <Router>
               <AppRoutes />
             </Router>
           </TooltipProvider>
