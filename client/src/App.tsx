@@ -10,6 +10,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
 import { useSyncOnReconnect } from "./hooks/useSyncOnReconnect";
+import { UpdateBanner } from "./components/UpdateBanner";
 
 // Pages
 import Home from "./pages/Home";
@@ -56,6 +57,7 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <AppProvider>
           <TooltipProvider>
+            <UpdateBanner />
             <Toaster position="top-center" richColors />
             <Router>
               <AppRoutes />
