@@ -1,28 +1,17 @@
 // ============================================================
 // GOOGLE APPS SCRIPT — Evaplant Opérations Terrain
-// Version 4 : openById fixe + nomenclature date_site_client_créateur
+// Version 5 : Drive REST API via UrlFetchApp (ANYONE_ANONYMOUS fix)
 // ============================================================
 //
-// CORRECTIONS v4 :
-// - Utilise SpreadsheetApp.openById() au lieu de getActiveSpreadsheet()
-//   (getActiveSpreadsheet() retourne null dans un Web App déployé)
-// - Nomenclature PDF : YYYYMMDD_Site_Client_Createur.pdf
-// - Dossier Drive par site : tous les rapports d'un même site
-//   vont dans le même sous-dossier
+// CORRECTIONS v5 :
+// - Remplace DriveApp par Drive REST API via UrlFetchApp + ScriptApp.getOAuthToken()
+//   (DriveApp ne fonctionne pas en mode ANYONE_ANONYMOUS)
+// - Même logique de dossiers et nomenclature que v4
 //
 // STRATÉGIE D'UPSERT :
 //   - reportId  : UUID interne stable → colonne "ID" → clé d'upsert
 //   - reportNumber : numéro visible (ex: "0001") → colonne "Numéro"
 //
-// INSTRUCTIONS DE DÉPLOIEMENT :
-// 1. Ouvrez votre Google Sheet
-// 2. Cliquez sur Extensions > Apps Script
-// 3. Remplacez TOUT le code par ce fichier
-// 4. Cliquez Enregistrer (icône disquette)
-// 5. Cliquez Déployer > Gérer les déploiements
-// 6. Cliquez l'icône crayon (modifier) sur le déploiement actif
-// 7. Dans "Version", sélectionnez "Nouvelle version"
-// 8. Cliquez Déployer (l'URL reste la même)
 // ============================================================
 
 // ── IDs fixes ──────────────────────────────────────────────
@@ -57,7 +46,7 @@ function doGet(e) {
 
   return jsonResponse({
     status: "ok",
-    message: "Evaplant Apps Script v4 actif — openById + nomenclature date_site_client_createur",
+    message: "Evaplant Apps Script v5 actif — Drive REST API + ANYONE_ANONYMOUS",
     spreadsheetId: SPREADSHEET_ID,
     timestamp: new Date().toISOString()
   });
@@ -127,7 +116,6 @@ function doPost(e) {
 // upsertRow — Ajoute ou met à jour une ligne par UUID
 // ============================================================
 function upsertRow(sheetName, reportId, reportNumber, data) {
-  // CORRECTION v4 : openById au lieu de getActiveSpreadsheet()
   var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -222,25 +210,26 @@ function applyRowStyle(sheet, rowNum, numCols) {
 }
 
 // ============================================================
-// handleUploadPdf — Upload PDF vers Drive
-// Nomenclature : YYYYMMDD_Site_Client_Createur.pdf
-// Dossier : RAPPORTS_EVAPLANT_V2 / <site> (un dossier par site)
+// handleUploadPdf — Upload PDF vers Drive via REST API
+// Utilise UrlFetchApp + ScriptApp.getOAuthToken() pour contourner
+// la limitation DriveApp en mode ANYONE_ANONYMOUS
+// Nomenclature : YYYYMMDD_Site_Client_Createur_Type.pdf
+// Dossier : EVAPLANT_FOLDER_ID / RAPPORTS_EVAPLANT_V2 / <site>
 // ============================================================
 function handleUploadPdf(payload) {
   try {
-    var base64    = payload.base64;
-    var site      = payload.site     || "Autres";
-    var client    = payload.client   || "";
-    var operator  = payload.operator || "";
-    var date      = payload.date     || Utilities.formatDate(new Date(), "America/Toronto", "yyyyMMdd");
-    var reportType = payload.reportType || "Suivi"; // "Suivi" ou "Pompage"
+    var base64     = payload.base64;
+    var site       = payload.site       || "Autres";
+    var client     = payload.client     || "";
+    var operator   = payload.operator   || "";
+    var date       = payload.date       || Utilities.formatDate(new Date(), "America/Toronto", "yyyyMMdd");
+    var reportType = payload.reportType || "Suivi";
 
     if (!base64) {
       return jsonResponse({ status: "error", message: "Champ 'base64' requis" });
     }
 
     // ── Construire le nom de fichier normalisé ──
-    // Format : YYYYMMDD_Site_Client_Createur_Type.pdf
     function sanitize(s) {
       return String(s || "").replace(/[^a-zA-Z0-9\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
     }
@@ -254,44 +243,33 @@ function handleUploadPdf(payload) {
     if (clientPart)   parts.push(clientPart);
     if (operatorPart) parts.push(operatorPart);
     parts.push(typePart);
-
     var filename = parts.join("_") + ".pdf";
 
-    // ── Accéder au dossier Evaplant (Mon Drive) et trouver/créer RAPPORTS_EVAPLANT_V2 ──
-    var evaplantFolder = DriveApp.getFolderById(EVAPLANT_FOLDER_ID);
-    var rapportsFolders = evaplantFolder.getFoldersByName(RAPPORTS_FOLDER_NAME);
-    var parentFolder;
-    if (rapportsFolders.hasNext()) {
-      parentFolder = rapportsFolders.next();
-    } else {
-      parentFolder = evaplantFolder.createFolder(RAPPORTS_FOLDER_NAME);
-    }
+    // ── Token OAuth de l'utilisateur déployant ──
+    var token = ScriptApp.getOAuthToken();
+
+    // ── Trouver ou créer le dossier RAPPORTS_EVAPLANT_V2 dans EVAPLANT_FOLDER_ID ──
+    var parentFolderId = driveGetOrCreateFolder(RAPPORTS_FOLDER_NAME, EVAPLANT_FOLDER_ID, token);
 
     // ── Trouver ou créer le sous-dossier par site ──
-    var siteFolder;
-    var siteFolders = parentFolder.getFoldersByName(sitePart);
-    if (siteFolders.hasNext()) {
-      siteFolder = siteFolders.next();
-    } else {
-      siteFolder = parentFolder.createFolder(sitePart);
-    }
+    var siteFolderId = driveGetOrCreateFolder(sitePart, parentFolderId, token);
 
     // ── Supprimer l'ancien fichier si même nom ──
-    var existingFiles = siteFolder.getFilesByName(filename);
-    if (existingFiles.hasNext()) {
-      existingFiles.next().setTrashed(true);
-    }
+    driveDeleteFileByName(filename, siteFolderId, token);
 
-    // ── Créer le fichier PDF ──
+    // ── Uploader le PDF ──
     var pdfBytes = Utilities.base64Decode(base64);
-    var blob     = Utilities.newBlob(pdfBytes, "application/pdf", filename);
-    var file     = siteFolder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var fileId   = driveUploadFile(filename, "application/pdf", pdfBytes, siteFolderId, token);
+
+    // ── Rendre le fichier accessible via lien ──
+    driveSetPublicLink(fileId, token);
+
+    var fileUrl = "https://drive.google.com/file/d/" + fileId + "/view";
 
     return jsonResponse({
       status: "success",
-      fileId: file.getId(),
-      fileUrl: file.getUrl(),
+      fileId: fileId,
+      fileUrl: fileUrl,
       filename: filename,
       folderName: sitePart,
       message: "PDF \"" + filename + "\" sauvegardé dans \"" + sitePart + "\""
@@ -302,11 +280,113 @@ function handleUploadPdf(payload) {
   }
 }
 
+// ── Helpers Drive REST API ──────────────────────────────────
+
+function driveGetOrCreateFolder(name, parentId, token) {
+  // Chercher un dossier existant
+  var query = "mimeType='application/vnd.google-apps.folder' and name='" + name.replace(/'/g, "\\'") + "' and '" + parentId + "' in parents and trashed=false";
+  var searchUrl = "https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(query) + "&fields=files(id,name)";
+  var searchResp = UrlFetchApp.fetch(searchUrl, {
+    method: "GET",
+    headers: { "Authorization": "Bearer " + token },
+    muteHttpExceptions: true
+  });
+  var searchData = JSON.parse(searchResp.getContentText());
+  if (searchData.files && searchData.files.length > 0) {
+    return searchData.files[0].id;
+  }
+  // Créer le dossier
+  var createResp = UrlFetchApp.fetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    payload: JSON.stringify({
+      name: name,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentId]
+    }),
+    muteHttpExceptions: true
+  });
+  var createData = JSON.parse(createResp.getContentText());
+  if (!createData.id) {
+    throw new Error("Impossible de créer le dossier '" + name + "': " + createResp.getContentText());
+  }
+  return createData.id;
+}
+
+function driveDeleteFileByName(filename, folderId, token) {
+  var query = "name='" + filename.replace(/'/g, "\\'") + "' and '" + folderId + "' in parents and trashed=false";
+  var searchUrl = "https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(query) + "&fields=files(id)";
+  var resp = UrlFetchApp.fetch(searchUrl, {
+    method: "GET",
+    headers: { "Authorization": "Bearer " + token },
+    muteHttpExceptions: true
+  });
+  var data = JSON.parse(resp.getContentText());
+  if (data.files && data.files.length > 0) {
+    data.files.forEach(function(f) {
+      UrlFetchApp.fetch("https://www.googleapis.com/drive/v3/files/" + f.id + "?supportsAllDrives=true", {
+        method: "DELETE",
+        headers: { "Authorization": "Bearer " + token },
+        muteHttpExceptions: true
+      });
+    });
+  }
+}
+
+function driveUploadFile(filename, mimeType, bytes, folderId, token) {
+  // Multipart upload
+  var boundary = "-------evaplant_boundary_" + new Date().getTime();
+  var metadata = JSON.stringify({ name: filename, parents: [folderId] });
+
+  var bodyParts = [
+    "--" + boundary + "\r\n",
+    "Content-Type: application/json; charset=UTF-8\r\n\r\n",
+    metadata + "\r\n",
+    "--" + boundary + "\r\n",
+    "Content-Type: " + mimeType + "\r\n\r\n"
+  ];
+
+  // Construire le body en bytes
+  var bodyStart = Utilities.newBlob(bodyParts.join("")).getBytes();
+  var bodyEnd   = Utilities.newBlob("\r\n--" + boundary + "--").getBytes();
+  var fullBody  = bodyStart.concat(bytes).concat(bodyEnd);
+
+  var uploadResp = UrlFetchApp.fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "multipart/related; boundary=" + boundary
+    },
+    payload: Utilities.newBlob(fullBody).getBytes(),
+    muteHttpExceptions: true
+  });
+
+  var uploadData = JSON.parse(uploadResp.getContentText());
+  if (!uploadData.id) {
+    throw new Error("Upload échoué: " + uploadResp.getContentText());
+  }
+  return uploadData.id;
+}
+
+function driveSetPublicLink(fileId, token) {
+  UrlFetchApp.fetch("https://www.googleapis.com/drive/v3/files/" + fileId + "/permissions", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    payload: JSON.stringify({ role: "reader", type: "anyone" }),
+    muteHttpExceptions: true
+  });
+}
+
 // ============================================================
 // listRows — Lecture pour synchro multi-utilisateurs
 // ============================================================
 function listRows(sheetName) {
-  // CORRECTION v4 : openById
   var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet || sheet.getLastRow() < 2) return [];
@@ -334,22 +414,22 @@ function jsonResponse(obj) {
 // testScript — Test manuel dans Apps Script Editor
 // ============================================================
 function testScript() {
-  var testId = "test-uuid-v4-001";
+  var testId = "test-uuid-v5-001";
   var testData = {
     "ID": testId,
-    "Numéro": "TEST-V4",
+    "Numéro": "TEST-V5",
     "Statut": "Complété",
     "Client": "WM",
     "Site": "P2519_Saint-Nicephore",
-    "Date": "2026-05-25",
+    "Date": "2026-05-26",
     "Opérateur": "Jerome"
   };
 
-  var r1 = upsertRow(SHEET_SUIVI, testId, "TEST-V4", testData);
+  var r1 = upsertRow(SHEET_SUIVI, testId, "TEST-V5", testData);
   Logger.log("Test 1 (insertion) : " + r1.action + " — attendu : inserted");
 
   testData["Statut"] = "Mis à jour";
-  var r2 = upsertRow(SHEET_SUIVI, testId, "TEST-V4", testData);
+  var r2 = upsertRow(SHEET_SUIVI, testId, "TEST-V5", testData);
   Logger.log("Test 2 (update) : " + r2.action + " — attendu : updated");
 
   var rows = listRows(SHEET_SUIVI);
@@ -357,7 +437,7 @@ function testScript() {
   Logger.log("Test 3 (pas de doublon) : " + testRows.length + " ligne(s) — attendu : 1");
 
   if (r2.action === "updated" && testRows.length === 1) {
-    Logger.log("✓ Tous les tests passent — v4 openById fonctionnel");
+    Logger.log("✓ Tous les tests passent — v5 Drive REST API fonctionnel");
   } else {
     Logger.log("✗ Échec des tests");
   }

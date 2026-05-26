@@ -124,25 +124,40 @@ export default function PompageWizard() {
       // 1. Synchronisation Google Sheets
       const { sheetsOk, sheetsError } = await autoAddPompageToExcel(finalized);
       if (sheetsOk) {
-        toast.success("✓ Test finalisé et synchronisé dans Google Sheets", { duration: 5000 });
+        toast.success("✅ Test synchronisé dans Google Sheets", { duration: 4000 });
       } else {
         toast.warning(
-          `Test finalisé localement — synchro Sheets échouée : ${sheetsError ?? "erreur inconnue"}`,
-          { duration: 6000 }
+          `⚠️ Test sauvegardé localement — Sheets indisponible (${sheetsError ?? "erreur réseau"})`,
+          { duration: 7000 }
         );
       }
 
       // 2. Génération PDF + upload automatique vers Google Drive
       try {
+        toast.loading("Génération du PDF en cours...", { id: "pdf-upload" });
         const pdfResult = await generatePompagePDF(finalized);
-        const siteName = finalized.context?.site ?? "Autres";
-        const driveResult = await uploadPdfToDrive(pdfResult.base64, pdfResult.filename, siteName);
+        const driveResult = await uploadPdfToDrive({
+          base64: pdfResult.base64,
+          site: finalized.context?.site ?? "Autres",
+          client: finalized.context?.client ?? "",
+          operator: finalized.testedBy ?? "",
+          date: finalized.date ?? "",
+          reportType: "Pompage",
+        });
         if (driveResult.success) {
-          toast.success(`☁️ PDF sauvegardé dans Google Drive (${driveResult.folderName})`, { duration: 5000 });
+          toast.success(
+            `☁️ PDF sauvegardé dans Drive — ${driveResult.filename}`,
+            { id: "pdf-upload", duration: 7000 }
+          );
         } else {
+          toast.error(
+            `PDF non sauvegardé dans Drive : ${driveResult.error}`,
+            { id: "pdf-upload", duration: 7000 }
+          );
           console.warn("[PompageWizard] Upload Drive échoué:", driveResult.error);
         }
       } catch (pdfErr) {
+        toast.dismiss("pdf-upload");
         console.warn("[PompageWizard] Erreur PDF/Drive:", pdfErr);
         // Non bloquant
       }
