@@ -165,6 +165,8 @@ export default function SuiviWizard() {
         sheets: sheetsOk ? "ok" : "error",
         sheetsError: sheetsOk ? undefined : (sheetsError ?? "Erreur réseau"),
       }));
+      // Persister le statut Sheets
+      await saveSuivi({ ...finalized, syncedToSheets: sheetsOk });
 
       // 2. Génération PDF + upload Drive
       try {
@@ -184,6 +186,14 @@ export default function SuiviWizard() {
             driveUrl: driveResult.fileUrl,
             driveFilename: driveResult.filename,
           }));
+          // Persister le statut Drive
+          await saveSuivi({
+            ...finalized,
+            syncedToSheets: sheetsOk,
+            syncedToDrive: true,
+            driveFileUrl: driveResult.fileUrl,
+            driveFilename: driveResult.filename,
+          });
         } else {
           setPublishStatus((prev) => ({
             ...prev,

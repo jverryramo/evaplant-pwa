@@ -230,7 +230,10 @@ export interface SuiviReport {
   // Méta
   createdAt: string;
   updatedAt: string;
-  syncedToSheets?: boolean; // true si synchronisé avec succès vers Google Sheets
+  syncedToSheets?: boolean;   // true si synchronisé avec succès vers Google Sheets
+  syncedToDrive?: boolean;    // true si PDF uploadé avec succès vers Google Drive
+  driveFileUrl?: string;      // URL du fichier PDF dans Drive
+  driveFilename?: string;     // Nom du fichier PDF dans Drive
 }
 
 // ============================================================

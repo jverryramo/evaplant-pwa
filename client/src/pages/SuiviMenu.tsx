@@ -10,6 +10,7 @@ import { useApp } from "@/contexts/AppContext";
 import type { SuiviReport, ReportStatus } from "@/lib/types";
 import { STATUS_LABELS } from "@/lib/types";
 import { generateSuiviPDF } from "@/lib/pdfExport";
+import { uploadPdfToDrive } from "@/lib/googleDrive";
 import { downloadCumulativeExcel, autoAddSuiviToExcel } from "@/lib/excelExport";
 import {
   AlertDialog,
@@ -101,11 +102,41 @@ export default function SuiviMenu() {
   const handleRetrySync = async (report: SuiviReport) => {
     setSyncingId(report.id);
     try {
+      // 1. Re-sync Google Sheets
       const { sheetsOk, sheetsError } = await autoAddSuiviToExcel(report);
       if (sheetsOk) {
-        toast.success("✓ Synchronisation réussie dans Google Sheets");
+        await saveSuivi({ ...report, syncedToSheets: true });
+        toast.success("✓ Données synchronisées dans Google Sheets");
       } else {
-        toast.error(`Échec de la synchronisation : ${sheetsError ?? "erreur inconnue"}`, { duration: 6000 });
+        toast.error(`Échec Sheets : ${sheetsError ?? "erreur inconnue"}`, { duration: 6000 });
+      }
+      // 2. Re-upload PDF vers Drive (si pas déjà fait)
+      if (!report.syncedToDrive) {
+        try {
+          const pdfResult = await generateSuiviPDF(report);
+          const driveResult = await uploadPdfToDrive({
+            base64: pdfResult.base64,
+            site: report.context?.site ?? "Autres",
+            client: report.context?.client ?? "",
+            operator: report.config?.createdBy ?? "",
+            date: report.config?.date ?? "",
+            reportType: "Suivi",
+          });
+          if (driveResult.success) {
+            await saveSuivi({
+              ...report,
+              syncedToSheets: sheetsOk,
+              syncedToDrive: true,
+              driveFileUrl: driveResult.fileUrl,
+              driveFilename: driveResult.filename,
+            });
+            toast.success("✓ PDF uploadé dans Google Drive");
+          } else {
+            toast.error(`Échec Drive : ${driveResult.error ?? "erreur inconnue"}`, { duration: 6000 });
+          }
+        } catch {
+          toast.error("Erreur lors de la génération du PDF");
+        }
       }
     } catch {
       toast.error("Erreur lors de la synchronisation");
@@ -220,6 +251,56 @@ export default function SuiviMenu() {
                       <div className="text-xs text-gray-400 mt-0.5">
                         {report.config.nombreZones} zone(s) · {report.config.nombreTensiometres} tensiomètre(s)
                       </div>
+                      {/* Indicateurs de sync Sheets + Drive */}
+                      {report.status === "completed" && (
+                        <div className="flex items-center gap-2 mt-2">
+                          {/* Google Sheets */}
+                          <div
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold"
+                            style={{
+                              background: report.syncedToSheets ? "#ECFDF5" : "#FEF3C7",
+                              color: report.syncedToSheets ? "#065F46" : "#92400E",
+                              border: `1px solid ${report.syncedToSheets ? "#6EE7B7" : "#FCD34D"}`,
+                            }}
+                            title={report.syncedToSheets ? "Synchronisé dans Google Sheets" : "Non synchronisé dans Google Sheets"}
+                          >
+                            <span>{report.syncedToSheets ? "✓" : "⏳"}</span>
+                            <span>Sheets</span>
+                          </div>
+                          {/* Google Drive PDF */}
+                          {report.syncedToDrive && report.driveFileUrl ? (
+                            <a
+                              href={report.driveFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold"
+                              style={{
+                                background: "#EFF6FF",
+                                color: "#1D4ED8",
+                                border: "1px solid #93C5FD",
+                              }}
+                              title={report.driveFilename ?? "Voir le PDF dans Drive"}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span>✓</span>
+                              <span>PDF Drive ↗</span>
+                            </a>
+                          ) : (
+                            <div
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold"
+                              style={{
+                                background: "#FEF3C7",
+                                color: "#92400E",
+                                border: "1px solid #FCD34D",
+                              }}
+                              title="PDF non encore uploadé dans Drive"
+                            >
+                              <span>⏳</span>
+                              <span>PDF Drive</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
