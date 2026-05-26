@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { getAllSuiviReports, getAllPompageTests } from "../lib/db";
+import { getAllSuiviReports, getAllPompageTests, saveSuiviReport, savePompageTest } from "../lib/db";
 import { autoAddSuiviToExcel, autoAddPompageToExcel } from "../lib/excelExport";
 
 export function useSyncOnReconnect() {
@@ -14,6 +14,9 @@ export function useSyncOnReconnect() {
   const syncPendingReports = useCallback(async () => {
     if (isSyncing.current) return;
     if (!navigator.onLine) return;
+    // Ne pas synchroniser si on vient de réinitialiser
+    const skipTs = localStorage.getItem("evaplant-skip-sync");
+    if (skipTs && (Date.now() - Number(skipTs)) < 60000) return;
 
     isSyncing.current = true;
 
@@ -55,6 +58,8 @@ export function useSyncOnReconnect() {
         try {
           const { sheetsOk } = await autoAddSuiviToExcel(report);
           if (sheetsOk) {
+            // Préserver syncedToDrive existant lors de la sauvegarde
+            await saveSuiviReport({ ...report, syncedToSheets: true });
             successCount++;
           } else {
             errorCount++;
@@ -70,6 +75,8 @@ export function useSyncOnReconnect() {
         try {
           const { sheetsOk } = await autoAddPompageToExcel(test);
           if (sheetsOk) {
+            // Préserver syncedToDrive existant lors de la sauvegarde
+            await savePompageTest({ ...test, syncedToSheets: true });
             successCount++;
           } else {
             errorCount++;

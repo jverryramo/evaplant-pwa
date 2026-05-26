@@ -4,12 +4,23 @@
 // ============================================================
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Download, Settings, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Download, Settings, ChevronDown, ChevronRight, AlertTriangle, RefreshCw } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useApp } from "@/contexts/AppContext";
 import type { AppConfig } from "@/lib/types";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { clearAllData } from "@/lib/db";
 
 type ListKey = "clients" | "sites" | "systemes";
 
@@ -115,6 +126,28 @@ export default function Parametres() {
   const [localConfig, setLocalConfig] = useState<AppConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      // Vider tous les stores IndexedDB (fonctionne même avec connexion ouverte)
+      await clearAllData();
+      // Vider le localStorage
+      localStorage.clear();
+      // Vider le sessionStorage
+      sessionStorage.clear();
+      // Flag pour empêcher la re-sync depuis Sheets au prochain démarrage
+      localStorage.setItem("evaplant-skip-sync", String(Date.now()));
+      toast.success("App réinitialisée — rechargement...");
+      setTimeout(() => window.location.reload(), 1200);
+    } catch {
+      toast.error("Erreur lors de la réinitialisation");
+      setResetting(false);
+    }
+    setShowResetConfirm(false);
+  };
 
   useEffect(() => {
     if (config) setLocalConfig({ ...config });
@@ -136,6 +169,7 @@ export default function Parametres() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
+      const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
       // ── Feuille Rapports de suivi ──
@@ -342,16 +376,102 @@ export default function Parametres() {
           {saving ? "Sauvegarde..." : "Sauvegarder la configuration"}
         </button>
 
+        {/* Mise à jour de l'app */}
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold" style={{ color: "#166534" }}>Mettre à jour l'app</div>
+              <div className="text-xs mt-0.5" style={{ color: "#15803D" }}>Evaplant — v1.6.0</div>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  // 1. Vider tous les caches du navigateur (Workbox inclus)
+                  if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map((k) => caches.delete(k)));
+                  }
+                  // 2. Désinscrire tous les Service Workers
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map((r) => r.unregister()));
+                  }
+                } catch (e) {
+                  console.warn('Update cleanup error:', e);
+                }
+                // 3. Recharger en vidant le cache HTTP
+                window.location.reload();
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95"
+              style={{ background: "#003D39", color: "#DCF21E" }}
+            >
+              <RefreshCw size={15} />
+              Mettre à jour
+            </button>
+          </div>
+        </div>
+
+        {/* Section Réinitialisation */}
+        <div
+          className="rounded-xl p-4"
+          style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle size={14} color="#DC2626" />
+            <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#DC2626" }}>
+              Zone dangereuse
+            </div>
+          </div>
+          <div className="text-sm mb-3" style={{ color: "#7F1D1D" }}>
+            Efface toutes les données locales de l'app (rapports, tests, configuration). Les données déjà synchronisées dans Google Sheets et Drive ne seront pas affectées.
+          </div>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            disabled={resetting}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-60"
+            style={{ background: "#DC2626", color: "#fff" }}
+          >
+            <Trash2 size={15} />
+            {resetting ? "Réinitialisation..." : "Réinitialiser l'app"}
+          </button>
+        </div>
+
         {/* Infos version */}
         <div className="text-center pt-4">
           <p className="text-xs text-gray-400">
-            Evaplant Opérations Terrain — v1.0.0
+            Evaplant Opérations Terrain — v1.6.0
           </p>
           <p className="text-xs text-gray-300 mt-0.5">
             Données stockées localement sur cet appareil
           </p>
         </div>
       </div>
+
+      {/* Dialog confirmation réinitialisation */}
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Réinitialiser l'app ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action supprimera <strong>toutes les données locales</strong> : rapports de suivi, tests de pompage, configuration. Cette action est <strong>irréversible</strong>.
+              <br /><br />
+              Les données déjà synchronisées dans Google Sheets et Google Drive resteront intactes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleReset}
+              style={{ background: "#DC2626", color: "#fff" }}
+            >
+              Oui, tout effacer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

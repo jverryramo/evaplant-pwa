@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
-import { Save, Calendar, User, Droplets, ArrowRight } from "lucide-react";
+import { Save, Calendar, User, Droplets, ArrowRight, Loader2, CheckCircle2, XCircle, CloudUpload, ExternalLink, TableProperties } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useApp } from "@/contexts/AppContext";
 import type { PompageTest } from "@/lib/types";
@@ -61,6 +61,19 @@ export default function PompageWizard() {
   const [steps, setSteps] = useState<{ id: number; title: string; key: string }[]>([]);
   const [showFinalDialog, setShowFinalDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  // États de publication
+  const [showPublishResult, setShowPublishResult] = useState(false);
+  const [publishStatus, setPublishStatus] = useState<{
+    sheets: "idle" | "loading" | "ok" | "error";
+    sheetsError?: string;
+    drive: "idle" | "loading" | "ok" | "error";
+    driveError?: string;
+    driveUrl?: string;
+    driveFilename?: string;
+  }>({
+    sheets: "idle",
+    drive: "idle",
+  });
   // Champs de la page de configuration
   const [configDate, setConfigDate] = useState("");
   const [configTestedBy, setConfigTestedBy] = useState("");
@@ -117,24 +130,24 @@ export default function PompageWizard() {
   const handleFinalize = async () => {
     if (!test) return;
     setSaving(true);
+    setShowFinalDialog(false);
+    // Ouvrir l'écran de résultat immédiatement avec les deux en chargement
+    setPublishStatus({ sheets: "loading", drive: "loading" });
+    setShowPublishResult(true);
     try {
       const finalized = { ...test, status: "completed" as const };
       await savePompage(finalized);
-
       // 1. Synchronisation Google Sheets
       const { sheetsOk, sheetsError } = await autoAddPompageToExcel(finalized);
-      if (sheetsOk) {
-        toast.success("✅ Test synchronisé dans Google Sheets", { duration: 4000 });
-      } else {
-        toast.warning(
-          `⚠️ Test sauvegardé localement — Sheets indisponible (${sheetsError ?? "erreur réseau"})`,
-          { duration: 7000 }
-        );
-      }
-
-      // 2. Génération PDF + upload automatique vers Google Drive
+      setPublishStatus((prev) => ({
+        ...prev,
+        sheets: sheetsOk ? "ok" : "error",
+        sheetsError: sheetsOk ? undefined : (sheetsError ?? "Erreur réseau"),
+      }));
+      // Persister le statut Sheets
+      await savePompage({ ...finalized, syncedToSheets: sheetsOk });
+      // 2. Génération PDF + upload Drive
       try {
-        toast.loading("Génération du PDF en cours...", { id: "pdf-upload" });
         const pdfResult = await generatePompagePDF(finalized);
         const driveResult = await uploadPdfToDrive({
           base64: pdfResult.base64,
@@ -145,29 +158,46 @@ export default function PompageWizard() {
           reportType: "Pompage",
         });
         if (driveResult.success) {
-          toast.success(
-            `☁️ PDF sauvegardé dans Drive — ${driveResult.filename}`,
-            { id: "pdf-upload", duration: 7000 }
-          );
+          setPublishStatus((prev) => ({
+            ...prev,
+            drive: "ok",
+            driveUrl: driveResult.fileUrl,
+            driveFilename: driveResult.filename,
+          }));
+          // Persister le statut Drive
+          await savePompage({
+            ...finalized,
+            syncedToSheets: sheetsOk,
+            syncedToDrive: true,
+            driveFileUrl: driveResult.fileUrl,
+            driveFilename: driveResult.filename,
+          });
         } else {
-          toast.error(
-            `PDF non sauvegardé dans Drive : ${driveResult.error}`,
-            { id: "pdf-upload", duration: 7000 }
-          );
-          console.warn("[PompageWizard] Upload Drive échoué:", driveResult.error);
+          setPublishStatus((prev) => ({
+            ...prev,
+            drive: "error",
+            driveError: driveResult.error,
+          }));
         }
       } catch (pdfErr) {
-        toast.dismiss("pdf-upload");
         console.warn("[PompageWizard] Erreur PDF/Drive:", pdfErr);
-        // Non bloquant
+        setPublishStatus((prev) => ({
+          ...prev,
+          drive: "error",
+          driveError: "Erreur lors de la génération du PDF",
+        }));
       }
-      navigate("/pompage");
     } catch (err) {
       console.error("[PompageWizard] Erreur finalisation:", err);
-      toast.error("Erreur lors de la finalisation");
+      setPublishStatus((prev) => ({
+        ...prev,
+        sheets: prev.sheets === "loading" ? "error" : prev.sheets,
+        sheetsError: "Erreur lors de la sauvegarde",
+        drive: prev.drive === "loading" ? "error" : prev.drive,
+        driveError: "Annulé suite à une erreur",
+      }));
     } finally {
       setSaving(false);
-      setShowFinalDialog(false);
     }
   };
 
@@ -334,7 +364,7 @@ export default function PompageWizard() {
     if (key === "filtreY") {
       return (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <ValueInput
               label="Pression mesurée en amont du préfiltre"
               value={test.filtreY.amontMesuree}
@@ -430,7 +460,7 @@ export default function PompageWizard() {
     if (key === "debitmetre") {
       return (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <ValueInput
               label="Pression mesurée en aval du préfiltre"
               value={test.debitmetre.avalMesuree}
@@ -448,7 +478,7 @@ export default function PompageWizard() {
               disabled={isLocked}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <ValueInput
               label="Pression PLC mesurée"
               value={test.debitmetre.plcPressionMesuree}
@@ -466,7 +496,7 @@ export default function PompageWizard() {
               disabled={isLocked}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <ValueInput
               label="Débit PLC mesuré"
               value={test.debitmetre.plcDebitMesure}
@@ -826,6 +856,125 @@ export default function PompageWizard() {
         )}
       </div>
 
+      {/* Écran de publication */}
+      {showPublishResult && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: "#003D39" }}
+        >
+          {/* En-tête */}
+          <div className="flex items-center gap-4 px-5 pt-14 pb-6">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(220,242,30,0.15)" }}
+            >
+              <CheckCircle2 size={28} color="#DCF21E" />
+            </div>
+            <div>
+              <div className="text-lg font-bold" style={{ color: "#DCF21E" }}>Test finalisé</div>
+              <div className="text-sm mt-0.5" style={{ color: "rgba(245,240,234,0.6)" }}>
+                N° {test.testNumber?.toString().padStart(4, "0")} — {test.date}
+              </div>
+            </div>
+          </div>
+          {/* Statuts */}
+          <div className="mx-4 rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+            {/* Google Sheets */}
+            <div className="flex items-center gap-4 px-5 py-4 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(220,242,30,0.12)" }}>
+                <TableProperties size={21} color="#DCF21E" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold" style={{ color: "#F5F0EA" }}>Google Sheets</div>
+                <div className="text-xs mt-0.5" style={{ color: "rgba(245,240,234,0.5)" }}>
+                  {publishStatus.sheets === "loading" && "Synchronisation en cours..."}
+                  {publishStatus.sheets === "ok" && "Données synchronisées"}
+                  {publishStatus.sheets === "error" && (publishStatus.sheetsError ?? "Erreur de synchronisation")}
+                </div>
+              </div>
+              <div className="flex-shrink-0">
+                {publishStatus.sheets === "loading" && <Loader2 size={24} className="animate-spin" color="#DCF21E" />}
+                {publishStatus.sheets === "ok" && <CheckCircle2 size={24} color="#DCF21E" />}
+                {publishStatus.sheets === "error" && <XCircle size={24} color="#FF6B6B" />}
+              </div>
+            </div>
+            {/* Google Drive PDF */}
+            <div className="flex items-center gap-4 px-5 py-4">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(220,242,30,0.12)" }}>
+                <CloudUpload size={21} color="#DCF21E" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold" style={{ color: "#F5F0EA" }}>PDF — Google Drive</div>
+                <div className="text-xs mt-0.5 truncate" style={{ color: "rgba(245,240,234,0.5)" }}>
+                  {publishStatus.drive === "loading" && "Génération et envoi du PDF..."}
+                  {publishStatus.drive === "ok" && (publishStatus.driveFilename ?? "PDF sauvegardé")}
+                  {publishStatus.drive === "error" && (publishStatus.driveError ?? "Erreur d'envoi")}
+                </div>
+              </div>
+              <div className="flex-shrink-0 flex items-center gap-2">
+                {publishStatus.drive === "loading" && <Loader2 size={24} className="animate-spin" color="#DCF21E" />}
+                {publishStatus.drive === "ok" && (
+                  <>
+                    {publishStatus.driveUrl && (
+                      <a
+                        href={publishStatus.driveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center"
+                        style={{ background: "rgba(220,242,30,0.18)" }}
+                      >
+                        <ExternalLink size={16} color="#DCF21E" />
+                      </a>
+                    )}
+                    <CheckCircle2 size={24} color="#DCF21E" />
+                  </>
+                )}
+                {publishStatus.drive === "error" && <XCircle size={24} color="#FF6B6B" />}
+              </div>
+            </div>
+          </div>
+          {/* Infos test */}
+          <div className="mx-4 mt-3 rounded-2xl px-5 py-4" style={{ background: "rgba(255,255,255,0.04)" }}>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-xs" style={{ color: "rgba(245,240,234,0.4)" }}>Site</div>
+                <div className="text-sm font-medium mt-0.5 truncate" style={{ color: "#F5F0EA" }}>{test.context?.site ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: "rgba(245,240,234,0.4)" }}>Client</div>
+                <div className="text-sm font-medium mt-0.5" style={{ color: "#F5F0EA" }}>{test.context?.client ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: "rgba(245,240,234,0.4)" }}>Testé par</div>
+                <div className="text-sm font-medium mt-0.5" style={{ color: "#F5F0EA" }}>{test.testedBy}</div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: "rgba(245,240,234,0.4)" }}>Mode</div>
+                <div className="text-sm font-medium mt-0.5 capitalize" style={{ color: "#F5F0EA" }}>{test.modeOperation}</div>
+              </div>
+            </div>
+          </div>
+          {/* Bouton retour */}
+          <div className="mt-auto px-4 pb-10 pt-6">
+            <button
+              onClick={() => { setShowPublishResult(false); navigate("/pompage"); }}
+              disabled={publishStatus.sheets === "loading" || publishStatus.drive === "loading"}
+              className="w-full py-4 rounded-2xl text-base font-bold transition-all active:scale-[0.98]"
+              style={{
+                background: (publishStatus.sheets === "loading" || publishStatus.drive === "loading")
+                  ? "rgba(220,242,30,0.2)"
+                  : "#DCF21E",
+                color: "#003D39",
+                opacity: (publishStatus.sheets === "loading" || publishStatus.drive === "loading") ? 0.5 : 1,
+              }}
+            >
+              {(publishStatus.sheets === "loading" || publishStatus.drive === "loading")
+                ? "Publication en cours..."
+                : "Retour aux tests"}
+            </button>
+          </div>
+        </div>
+      )}
       <AlertDialog open={showFinalDialog} onOpenChange={setShowFinalDialog}>
         <AlertDialogContent className="max-h-[85vh] overflow-y-auto">
           <AlertDialogHeader>

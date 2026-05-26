@@ -3,10 +3,18 @@
 // Chaque rapport finalisé est ajouté automatiquement au fichier
 // ============================================================
 
-import * as XLSX from "xlsx";
 import { generateId } from "./types";
 import type { SuiviReport, PompageTest } from "./types";
 import { addExcelRow, hasExcelRow, getExcelRowsByType, getAllSuiviReports, getAllPompageTests } from "./db";
+
+// Lazy-loaded XLSX (chargé uniquement lors de l'export Excel)
+let XLSX: typeof import("xlsx");
+
+async function loadXLSX() {
+  if (!XLSX) {
+    XLSX = await import("xlsx");
+  }
+}
 
 // Traduction des statuts (jamais de valeur brute en anglais dans l'Excel)
 const STATUS_FR: Record<string, string> = {
@@ -273,11 +281,8 @@ export async function autoAddSuiviToExcel(report: SuiviReport): Promise<{ sheets
     });
   }
   const result = await sendToGoogleSheets({ type: "suivi", reportId: report.id, reportNumber: report.reportNumber, data: row });
-  // Marquer le rapport comme synchronisé si succès
-  if (result.success) {
-    const { saveSuiviReport } = await import("./db");
-    await saveSuiviReport({ ...report, syncedToSheets: true });
-  }
+  // NE PAS sauvegarder ici — l'appelant (SuiviWizard/SuiviMenu) s'en charge
+  // pour éviter d'écraser syncedToDrive avec un objet incomplet
   return {
     sheetsOk: result.success,
     sheetsError: result.success ? undefined : result.error,
@@ -299,11 +304,8 @@ export async function autoAddPompageToExcel(test: PompageTest): Promise<{ sheets
     });
   }
   const result = await sendToGoogleSheets({ type: "pompage", reportId: test.id, reportNumber: test.testNumber, data: row });
-  // Marquer le test comme synchronisé si succès
-  if (result.success) {
-    const { savePompageTest } = await import("./db");
-    await savePompageTest({ ...test, syncedToSheets: true });
-  }
+  // NE PAS sauvegarder ici — l'appelant (PompageWizard/PompageMenu) s'en charge
+  // pour éviter d'écraser syncedToDrive avec un objet incomplet
   return {
     sheetsOk: result.success,
     sheetsError: result.success ? undefined : result.error,
@@ -322,6 +324,7 @@ export async function autoAddPompageToExcel(test: PompageTest): Promise<{ sheets
 // toujours à jour, même pour les rapports créés avant une mise à jour de l'app.
 // ============================================================
 export async function downloadCumulativeExcel(): Promise<void> {
+  await loadXLSX();
   const [allSuivi, allPompage] = await Promise.all([
     getAllSuiviReports(),
     getAllPompageTests(),

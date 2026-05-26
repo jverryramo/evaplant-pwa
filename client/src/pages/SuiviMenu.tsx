@@ -64,6 +64,8 @@ export default function SuiviMenu() {
   const formatDate = (dateStr: string): string => {
     if (!dateStr) return "";
     try {
+      // Si c'est déjà au format YYYY-MM-DD, l'afficher tel quel
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
       return d.toLocaleDateString("fr-CA", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -160,8 +162,15 @@ export default function SuiviMenu() {
 
   const handleDownloadPDF = async (report: SuiviReport) => {
     try {
-      await generateSuiviPDF(report);
-      toast.success("PDF généré avec succès");
+      const { base64, filename } = await generateSuiviPDF(report);
+      // Déclencher le téléchargement
+      const link = document.createElement("a");
+      link.href = "data:application/pdf;base64," + base64;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("PDF téléchargé");
     } catch {
       toast.error("Erreur lors de la génération du PDF");
     }
@@ -340,25 +349,25 @@ export default function SuiviMenu() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       {report.status === "completed" && (
                         <button
                           onClick={() => handleDownloadPDF(report)}
-                          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                          className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="Télécharger le PDF"
                         >
-                          <FileDown size={15} color="#003D39" />
+                          <FileDown size={18} color="#003D39" />
                         </button>
                       )}
                       {report.status === "completed" && (
                         <button
                           onClick={() => handleRetrySync(report)}
                           disabled={syncingId === report.id}
-                          className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                          className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="Réessayer la synchronisation Google Sheets"
                         >
                           <RefreshCw
-                            size={15}
+                            size={18}
                             color="#003D39"
                             className={syncingId === report.id ? "animate-spin" : ""}
                           />
@@ -368,36 +377,36 @@ export default function SuiviMenu() {
                       {report.status === "completed" && !report.locked && (
                         <button
                           onClick={() => handleLock(report)}
-                          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                          className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="Verrouiller le rapport"
                         >
-                          <Lock size={15} color="#8A7049" />
+                          <Lock size={18} color="#8A7049" />
                         </button>
                       )}
                       {report.locked && (
                         <button
                           onClick={() => setUnlockTarget(report)}
-                          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                          className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="Déverrouiller le rapport"
                         >
-                          <LockOpen size={15} color="#003D39" />
+                          <LockOpen size={18} color="#003D39" />
                         </button>
                       )}
                       {!report.locked && (
                         <>
                           <button
                             onClick={() => setArchiveTarget(report)}
-                            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                            className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                             title="Archiver"
                           >
-                            <Archive size={15} color="#8A7049" />
+                            <Archive size={18} color="#8A7049" />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(report)}
-                            className="p-2 rounded-lg hover:bg-red-50 transition-colors"
+                            className="p-2.5 rounded-lg hover:bg-red-50 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                             title="Supprimer"
                           >
-                            <Trash2 size={15} color="#ef4444" />
+                            <Trash2 size={18} color="#ef4444" />
                           </button>
                         </>
                       )}
@@ -414,7 +423,7 @@ export default function SuiviMenu() {
                     }}
                   >
                     <span>
-                      {report.locked
+                      {report.locked || report.status === "completed"
                         ? "Consulter le rapport"
                         : report.status === "draft"
                         ? "Débuter le rapport"

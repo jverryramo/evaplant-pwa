@@ -53,9 +53,9 @@ export function WizardStep({
   return (
     <div className="flex flex-col h-full">
       {/* Barre de progression */}
-      <div className="h-1 bg-gray-100">
+      <div className="h-2 bg-gray-100 relative">
         <div
-          className="h-full transition-all duration-300"
+          className="h-full transition-all duration-300 rounded-r-full"
           style={{ width: `${progress}%`, background: "#DCF21E" }}
         />
       </div>
@@ -125,19 +125,31 @@ export function WizardStep({
           style={{ background: "#F5F0EA", color: "#003D39", border: "1px solid #DDCCBF" }}
         >
           <ChevronLeft size={16} />
-          {isFirst && !locked && showConfigOnFirst ? "Config." : "Précédent"}
+          {isFirst && !locked && showConfigOnFirst ? "← Retour" : "Précédent"}
         </button>
-        <button
-          onClick={onNext}
-          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-          style={{
-            background: isLast ? "#DCF21E" : "#003D39",
-            color: isLast ? "#003D39" : "#DCF21E",
-          }}
-        >
-          {isLast ? "Finaliser" : "Suivant"}
-          <ChevronRight size={16} />
-        </button>
+        {!locked && (
+          <button
+            onClick={onNext}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+            style={{
+              background: isLast ? "#DCF21E" : "#003D39",
+              color: isLast ? "#003D39" : "#DCF21E",
+            }}
+          >
+            {isLast ? "Finaliser" : "Suivant"}
+            <ChevronRight size={16} />
+          </button>
+        )}
+        {locked && !isLast && (
+          <button
+            onClick={onNext}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+            style={{ background: "#003D39", color: "#DCF21E" }}
+          >
+            Suivant
+            <ChevronRight size={16} />
+          </button>
+        )}
       </div>
 
       {/* Drawer "Aller directement à" */}

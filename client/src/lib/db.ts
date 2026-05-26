@@ -56,6 +56,24 @@ export interface EvaplantDB {
 
 let dbPromise: Promise<IDBPDatabase<EvaplantDB>> | null = null;
 
+export async function closeDB(): Promise<void> {
+  if (dbPromise) {
+    const db = await dbPromise;
+    db.close();
+    dbPromise = null;
+  }
+}
+
+export async function clearAllData(): Promise<void> {
+  const db = await getDB();
+  const storeNames = Array.from(db.objectStoreNames) as Array<keyof EvaplantDB>;
+  const tx = db.transaction(storeNames, "readwrite");
+  for (const name of storeNames) {
+    tx.objectStore(name).clear();
+  }
+  await tx.done;
+}
+
 export function getDB(): Promise<IDBPDatabase<EvaplantDB>> {
   if (!dbPromise) {
     dbPromise = openDB<EvaplantDB>(DB_NAME, DB_VERSION, {
@@ -188,21 +206,24 @@ export async function saveConfig(config: AppConfig): Promise<void> {
 }
 
 // ============================================================
-// COUNTERS (numérotation séquentielle GLOBALE — tous types confondus)
+// COUNTERS (numérotation séquentielle SÉPARÉE par type)
 // ============================================================
 
-// Un seul compteur global partagé entre suivi et pompage
-export async function getNextGlobalNumber(): Promise<string> {
+export async function getNextSuiviNumber(): Promise<string> {
   const db = await getDB();
-  const counter = await db.get("counters", "global-counter");
+  const counter = await db.get("counters", "suivi-counter");
   const next = (counter?.value ?? 0) + 1;
-  await db.put("counters", { id: "global-counter", value: next });
-  return String(next).padStart(4, "0");
+  await db.put("counters", { id: "suivi-counter", value: next });
+  return String(next);
 }
 
-// Alias pour compatibilité
-export const getNextSuiviNumber = getNextGlobalNumber;
-export const getNextPompageNumber = getNextGlobalNumber;
+export async function getNextPompageNumber(): Promise<string> {
+  const db = await getDB();
+  const counter = await db.get("counters", "pompage-counter");
+  const next = (counter?.value ?? 0) + 1;
+  await db.put("counters", { id: "pompage-counter", value: next });
+  return String(next);
+}
 
 // ============================================================
 // EXCEL CUMULATIF

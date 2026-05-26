@@ -221,7 +221,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {}
     }
     // Synchronisation depuis Google Sheets au démarrage (si en ligne)
-    if (navigator.onLine) {
+    // Sauf si on vient de réinitialiser (timestamp skip-sync < 60s)
+    const skipSyncTs = localStorage.getItem("evaplant-skip-sync");
+    const skipSyncActive = skipSyncTs && (Date.now() - Number(skipSyncTs)) < 60000;
+    if (!skipSyncActive && navigator.onLine) {
       syncFromSheets();
     }
   }, [refresh, syncFromSheets]);

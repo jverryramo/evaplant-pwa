@@ -57,9 +57,13 @@ function doGet(e) {
 // ============================================================
 function doPost(e) {
   try {
-    var rawBody = e.postData ? e.postData.contents : null;
+    // Lire le body depuis postData.contents (mode cors JSON) OU e.parameter.payload (mode no-cors FormData iOS)
+    var rawBody = (e.postData && e.postData.contents) ? e.postData.contents : null;
+    if (!rawBody && e.parameter && e.parameter.payload) {
+      rawBody = e.parameter.payload;
+    }
     if (!rawBody) {
-      return jsonResponse({ status: "error", message: "Corps de requête vide" });
+      return jsonResponse({ status: "error", message: "Corps de requ\u00eate vide" });
     }
 
     var payload = JSON.parse(rawBody);
@@ -179,7 +183,10 @@ function getOrCreateHeaders(sheet, data) {
   var existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
   var cleanHeaders = existingHeaders.filter(function(h) { return h.trim() !== ""; });
 
-  var newKeys = orderedKeys.filter(function(k) { return cleanHeaders.indexOf(k) === -1; });
+  // Normaliser pour comparaison : trim + collapse whitespace + NFC Unicode
+  function norm(s) { return String(s).trim().replace(/\s+/g, " "); }
+  var cleanHeadersNorm = cleanHeaders.map(norm);
+  var newKeys = orderedKeys.filter(function(k) { return cleanHeadersNorm.indexOf(norm(k)) === -1; });
   if (newKeys.length > 0) {
     var startCol = cleanHeaders.length + 1;
     newKeys.forEach(function(k, i) {
@@ -441,4 +448,53 @@ function testScript() {
   } else {
     Logger.log("✗ Échec des tests");
   }
+}
+
+// ============================================================
+// cleanDuplicateHeaders — Nettoie les colonnes dupliquées
+// À exécuter une seule fois manuellement depuis l'éditeur
+// ============================================================
+function cleanDuplicateHeaders() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheetNames = [SHEET_SUIVI, SHEET_POMPAGE];
+  
+  sheetNames.forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet || sheet.getLastRow() === 0) {
+      Logger.log(sheetName + " : feuille vide ou inexistante");
+      return;
+    }
+    
+    var lastCol = sheet.getLastColumn();
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+    
+    // Trouver les colonnes en doublon (garder la première occurrence)
+    var seen = {};
+    var colsToDelete = [];
+    for (var i = 0; i < headers.length; i++) {
+      var hn = headers[i].trim().replace(/\s+/g, " ");
+      if (hn === "") continue;
+      if (seen[hn] !== undefined) {
+        colsToDelete.push(i); // index 0-based
+        Logger.log(sheetName + " : doublon trouvé col " + (i+1) + " : \"" + headers[i] + "\"");
+      } else {
+        seen[hn] = i;
+      }
+    }
+    
+    if (colsToDelete.length === 0) {
+      Logger.log(sheetName + " : aucun doublon");
+      return;
+    }
+    
+    // Supprimer de droite à gauche pour ne pas décaler les indices
+    colsToDelete.sort(function(a, b) { return b - a; });
+    colsToDelete.forEach(function(colIdx) {
+      sheet.deleteColumn(colIdx + 1); // deleteColumn est 1-based
+    });
+    
+    Logger.log(sheetName + " : " + colsToDelete.length + " colonne(s) dupliquée(s) supprimée(s)");
+  });
+  
+  Logger.log("✓ Nettoyage terminé");
 }

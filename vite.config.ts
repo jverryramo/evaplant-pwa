@@ -151,12 +151,13 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const plugins = [
   react(),
   tailwindcss(),
   jsxLocPlugin(),
-  vitePluginManusRuntime(),
-  vitePluginManusDebugCollector(),
+  ...(!isProduction ? [vitePluginManusRuntime(), vitePluginManusDebugCollector()] : []),
   VitePWA({
     registerType: "autoUpdate",
     includeAssets: ["favicon.ico"],

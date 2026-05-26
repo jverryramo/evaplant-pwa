@@ -120,6 +120,8 @@ export default function PompageMenu() {
     try {
       const { sheetsOk, sheetsError } = await autoAddPompageToExcel(test);
       if (sheetsOk) {
+        // Préserver syncedToDrive existant lors de la sauvegarde
+        await savePompage({ ...test, syncedToSheets: true });
         toast.success("✓ Synchronisation réussie dans Google Sheets");
       } else {
         toast.error(`Échec de la synchronisation : ${sheetsError ?? "erreur inconnue"}`, { duration: 6000 });
@@ -133,8 +135,15 @@ export default function PompageMenu() {
 
   const handleDownloadPDF = async (test: PompageTest) => {
     try {
-      await generatePompagePDF(test);
-      toast.success("PDF généré avec succès");
+      const { base64, filename } = await generatePompagePDF(test);
+      // Déclencher le téléchargement
+      const link = document.createElement("a");
+      link.href = "data:application/pdf;base64," + base64;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("PDF téléchargé");
     } catch {
       toast.error("Erreur lors de la génération du PDF");
     }
@@ -329,7 +338,7 @@ export default function PompageMenu() {
                     }}
                   >
                     <span>
-                      {test.locked
+                      {test.locked || test.status === "completed"
                         ? "Consulter le test"
                         : test.status === "draft"
                         ? "Débuter le test"

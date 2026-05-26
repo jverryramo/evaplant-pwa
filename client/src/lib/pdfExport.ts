@@ -3,9 +3,20 @@
 // Design v2 : mise en page épurée, charte Ramo, sans bandes beiges
 // ============================================================
 
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import type { SuiviReport, PompageTest, AnnotatedPhoto } from "./types";
+
+// Lazy-loaded modules (chargés uniquement lors de la génération PDF)
+let jsPDF: typeof import("jspdf").default;
+let autoTable: typeof import("jspdf-autotable").default;
+
+async function loadPdfLibs() {
+  if (!jsPDF) {
+    const jspdfModule = await import("jspdf");
+    jsPDF = jspdfModule.default;
+    const autoTableModule = await import("jspdf-autotable");
+    autoTable = autoTableModule.default;
+  }
+}
 
 // Logo Ramo — version blanche pour fond vert foncé
 const RAMO_LOGO_URL =
@@ -343,6 +354,7 @@ export interface PdfResult {
 }
 
 export async function generateSuiviPDF(report: SuiviReport): Promise<PdfResult> {
+  await loadPdfLibs();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const logoBase64 = await loadImageBase64(RAMO_LOGO_URL);
   const pageH = doc.internal.pageSize.getHeight();
@@ -547,7 +559,11 @@ export async function generateSuiviPDF(report: SuiviReport): Promise<PdfResult> 
 
   // ── Nomenclature fichier ─────────────────────────────────────
   function sanitizePart(s: string): string {
-    return (s || "").replace(/[^a-zA-Z0-9\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    return (s || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Retirer les accents
+      .replace(/[^a-zA-Z0-9\-]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
   }
   const datePart    = sanitizePart(report.config.date).replace(/-/g, "");
   const sitePart    = sanitizePart(report.context.site);
@@ -565,6 +581,7 @@ export async function generateSuiviPDF(report: SuiviReport): Promise<PdfResult> 
 // Générer le PDF d'un test de pompage
 // ============================================================
 export async function generatePompagePDF(test: PompageTest): Promise<PdfResult> {
+  await loadPdfLibs();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const logoBase64 = await loadImageBase64(RAMO_LOGO_URL);
   const pageH = doc.internal.pageSize.getHeight();
@@ -696,7 +713,11 @@ export async function generatePompagePDF(test: PompageTest): Promise<PdfResult> 
 
   // ── Nomenclature fichier ─────────────────────────────────────
   function sanitizeP(s: string): string {
-    return (s || "").replace(/[^a-zA-Z0-9\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    return (s || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Retirer les accents
+      .replace(/[^a-zA-Z0-9\-]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
   }
   const datePart2    = sanitizeP(test.date).replace(/-/g, "");
   const sitePart2    = sanitizeP(test.context.site);

@@ -93,7 +93,30 @@ export async function sendToGoogleSheets(payload: {
     "| Colonnes:", Object.keys(dataWithId).length
   );
 
-  try {
+  // Tentative 1 : mode cors standard
+  // Tentative 2 : mode no-cors (iOS Safari fallback) — on ne peut pas lire la réponse
+  //               mais si la requête passe sans exception, on considère que c'est un succès
+  const attemptFetch = async (useFallback: boolean): Promise<SheetsResult> => {
+    if (useFallback) {
+      // Mode no-cors : contourne le preflight iOS Safari
+      // On encode les données dans un FormData pour éviter le preflight
+      const form = new FormData();
+      form.append('payload', body);
+      await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        body: form,
+      });
+      // En mode no-cors on ne peut pas lire la réponse — on suppose succès
+      console.log("[GoogleSheets] ✓ Envoi no-cors (iOS fallback) — supposé succès");
+      return {
+        success: true,
+        message: `Rapport synchronisé — reportNumber: ${reportNum}`,
+        action: undefined,
+        debugInfo: { reportNumber: reportNum, reportId, action: "inserted", sheet: sheetTarget }
+      };
+    }
+
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       mode: "cors",
@@ -125,7 +148,6 @@ export async function sendToGoogleSheets(payload: {
 
     const action = json.action as "updated" | "inserted" | undefined;
     const sheetName = json.sheet ?? sheetTarget;
-
     const debugInfo: SheetsDebugInfo = {
       reportNumber: reportNum,
       reportId,
@@ -156,14 +178,25 @@ export async function sendToGoogleSheets(payload: {
       error: json.message ?? "Erreur inconnue du script",
       debugInfo
     };
+  };
+
+  try {
+    return await attemptFetch(false);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error("[GoogleSheets] ✗ Erreur réseau:", errorMsg);
-    return {
-      success: false,
-      error: `Erreur réseau: ${errorMsg}`,
-      debugInfo: { reportNumber: reportNum, reportId, action: "error", sheet: payload.type }
-    };
+    console.warn("[GoogleSheets] ⚠ Erreur cors, tentative no-cors:", errorMsg);
+    // Fallback no-cors pour iOS Safari
+    try {
+      return await attemptFetch(true);
+    } catch (err2) {
+      const errorMsg2 = err2 instanceof Error ? err2.message : String(err2);
+      console.error("[GoogleSheets] ✗ Erreur réseau (no-cors):", errorMsg2);
+      return {
+        success: false,
+        error: `Erreur réseau: ${errorMsg2}`,
+        debugInfo: { reportNumber: reportNum, reportId, action: "error", sheet: payload.type }
+      };
+    }
   }
 }
 

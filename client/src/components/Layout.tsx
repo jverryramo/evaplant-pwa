@@ -139,36 +139,39 @@ export default function Layout({
         )}
       </header>
 
-      {/* Bandeau hors ligne */}
-      {!isOnline && (
-        <div
-          className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold"
-          style={{ background: "#8A7049", color: "#DDCCBF" }}
-        >
-          <WifiOff size={13} />
-          <span>Hors ligne — la synchronisation Google Sheets sera effectuée au retour de la connectivité</span>
-        </div>
-      )}
+      {/* Espace réservé pour les bandeaux de statut (CLS fix) */}
+      <div style={{ minHeight: (!isOnline || syncStatus === "syncing" || syncStatus === "error") ? "28px" : "0px" }}>
+        {/* Bandeau hors ligne */}
+        {!isOnline && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold"
+            style={{ background: "#8A7049", color: "#DDCCBF" }}
+          >
+            <WifiOff size={13} />
+            <span>Hors ligne — la synchronisation Google Sheets sera effectuée au retour de la connectivité</span>
+          </div>
+        )}
 
-      {/* Bandeau synchronisation Google Sheets */}
-      {isOnline && syncStatus === "syncing" && (
-        <div
-          className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs"
-          style={{ background: "#004d47", color: "#DCF21E" }}
-        >
-          <Cloud size={12} className="animate-pulse" />
-          <span>Synchronisation des rapports en cours…</span>
-        </div>
-      )}
-      {isOnline && syncStatus === "error" && (
-        <div
-          className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs"
-          style={{ background: "#5c3a1e", color: "#DDCCBF" }}
-        >
-          <CloudOff size={12} />
-          <span>Synchronisation impossible — les données locales sont à jour</span>
-        </div>
-      )}
+        {/* Bandeau synchronisation Google Sheets */}
+        {isOnline && syncStatus === "syncing" && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs"
+            style={{ background: "#004d47", color: "#DCF21E" }}
+          >
+            <Cloud size={12} className="animate-pulse" />
+            <span>Synchronisation des rapports en cours…</span>
+          </div>
+        )}
+        {isOnline && syncStatus === "error" && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs"
+            style={{ background: "#5c3a1e", color: "#DDCCBF" }}
+          >
+            <CloudOff size={12} />
+            <span>Synchronisation impossible — les données locales sont à jour</span>
+          </div>
+        )}
+      </div>
 
       {/* Contexte actif — bandeau sous le header (cliquable pour changer) */}
       {activeContext && (
@@ -201,7 +204,7 @@ export default function Layout({
           className="fixed bottom-0 left-0 right-0 z-40 bottom-nav"
           style={{ maxWidth: "672px", margin: "0 auto", left: "50%", transform: "translateX(-50%)", width: "100%" }}
         >
-          <div className="flex items-center justify-around px-2 py-1">
+          <div className="flex items-center justify-around px-2 py-2">
             {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
               const isActive = path === "/"
                 ? location === "/"
@@ -210,7 +213,7 @@ export default function Layout({
                 <Link key={path} href={path}>
                   <button
                     className={cn(
-                      "flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all min-w-[56px]",
+                      "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all min-w-[60px] min-h-[48px]",
                       isActive
                         ? "text-[#003D39]"
                         : "text-gray-400 hover:text-gray-600"
@@ -218,19 +221,19 @@ export default function Layout({
                   >
                     <div
                       className={cn(
-                        "flex items-center justify-center w-8 h-8 rounded-lg transition-all",
+                        "flex items-center justify-center w-9 h-9 rounded-lg transition-all",
                         isActive ? "bg-[#DCF21E]" : "bg-transparent"
                       )}
                     >
                       <Icon
-                        size={18}
+                        size={20}
                         strokeWidth={isActive ? 2.5 : 1.8}
                         color={isActive ? "#003D39" : "#9ca3af"}
                       />
                     </div>
                     <span
                       className={cn(
-                        "text-[10px] font-medium leading-none",
+                        "text-[11px] font-medium leading-none",
                         isActive ? "text-[#003D39]" : "text-gray-400"
                       )}
                     >
