@@ -58,6 +58,19 @@ export default function SuiviMenu() {
   const [archiveTarget, setArchiveTarget] = useState<SuiviReport | null>(null);
   const [unlockTarget, setUnlockTarget] = useState<SuiviReport | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+
+  // Formater la date proprement (YYYY-MM-DD ou ISO → JJ/MM/AAAA)
+  const formatDate = (dateStr: string): string => {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString("fr-CA", { year: "numeric", month: "2-digit", day: "2-digit" });
+    } catch {
+      return dateStr;
+    }
+  };
 
   if (!activeContext) {
     navigate("/");
@@ -184,6 +197,29 @@ export default function SuiviMenu() {
           >
             <FileDown size={18} />
           </button>
+          {/* Bouton tout synchroniser */}
+          {filtered.some((r) => r.status === "completed" && (!r.syncedToSheets || !r.syncedToDrive)) && (
+            <button
+              onClick={async () => {
+                setSyncingAll(true);
+                const pending = filtered.filter((r) => r.status === "completed" && (!r.syncedToSheets || !r.syncedToDrive));
+                let ok = 0;
+                for (const r of pending) {
+                  await handleRetrySync(r);
+                  ok++;
+                }
+                setSyncingAll(false);
+                toast.success(`✓ ${ok} rapport(s) synchronisé(s)`);
+              }}
+              disabled={syncingAll}
+              className="flex items-center justify-center gap-1.5 px-3 rounded-xl py-3.5 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+              style={{ background: "#FEF3C7", color: "#92400E", border: "2px solid #FCD34D" }}
+              title="Synchroniser tous les rapports en attente"
+            >
+              <RefreshCw size={14} className={syncingAll ? "animate-spin" : ""} />
+              <span>Sync tout</span>
+            </button>
+          )}
         </div>
 
         {/* Onglets de filtre */}
@@ -246,7 +282,7 @@ export default function SuiviMenu() {
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {report.config.date} · {report.config.createdBy}
+                        {formatDate(report.config.date)} · {report.config.createdBy}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {report.config.nombreZones} zone(s) · {report.config.nombreTensiometres} tensiomètre(s)
