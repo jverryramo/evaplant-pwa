@@ -158,7 +158,7 @@ const plugins = [
   vitePluginManusRuntime(),
   vitePluginManusDebugCollector(),
   VitePWA({
-    registerType: "prompt",
+    registerType: "autoUpdate",
     includeAssets: ["favicon.ico"],
     manifest: {
       name: "Evaplant — Opérations Terrain",
@@ -177,6 +177,8 @@ const plugins = [
       ],
     },
     workbox: {
+      skipWaiting: true,
+      clientsClaim: true,
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       runtimeCaching: [
         {
