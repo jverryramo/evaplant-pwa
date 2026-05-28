@@ -10,6 +10,23 @@ import { useApp } from "@/contexts/AppContext";
 import type { AppConfig } from "@/lib/types";
 import { toast } from "sonner";
 
+// Formater une date ISO en format simple lisible (AAAA-MM-JJ HH:MM)
+function formatDate(isoString: string | undefined | null): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch {
+    return isoString;
+  }
+}
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,8 +226,8 @@ export default function Parametres() {
             r.autresEntretiens.photos.length,
             r.photosMensuelles.photos.length,
           ].reduce((a, b) => a + b, 0),
-          "Créé le": r.createdAt,
-          "Modifié le": r.updatedAt,
+          "Créé le": formatDate(r.createdAt),
+          "Modifié le": formatDate(r.updatedAt),
         };
 
         // Lectures tensiomètres PLC
@@ -275,8 +292,8 @@ export default function Parametres() {
           t.conduiteLavage.photos.length,
           t.finalisation.photos.length,
         ].reduce((a, b) => a + b, 0),
-        "Créé le": t.createdAt,
-        "Modifié le": t.updatedAt,
+        "Créé le": formatDate(t.createdAt),
+        "Modifié le": formatDate(t.updatedAt),
       }));
 
       // Créer les feuilles
@@ -384,7 +401,7 @@ export default function Parametres() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold" style={{ color: "#166534" }}>Mettre à jour l'app</div>
-              <div className="text-xs mt-0.5" style={{ color: "#15803D" }}>Evaplant — v1.6.0</div>
+              <div className="text-xs mt-0.5" style={{ color: "#15803D" }}>Evaplant — v1.6.1</div>
             </div>
             <button
               onClick={async () => {
@@ -442,7 +459,7 @@ export default function Parametres() {
         {/* Infos version */}
         <div className="text-center pt-4">
           <p className="text-xs text-gray-400">
-            Evaplant Opérations Terrain — v1.6.0
+            Evaplant Opérations Terrain — v1.6.1
           </p>
           <p className="text-xs text-gray-300 mt-0.5">
             Données stockées localement sur cet appareil

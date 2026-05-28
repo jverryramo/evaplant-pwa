@@ -36,6 +36,23 @@ function fr(val: string | undefined | null): string {
   return YESNO_FR[val] ?? val;
 }
 
+// Formater une date ISO en format simple lisible (AAAA-MM-JJ HH:MM)
+function formatDate(isoString: string | undefined | null): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString; // Si pas parseable, retourner tel quel
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch {
+    return isoString;
+  }
+}
+
 function frStatus(val: string | undefined | null): string {
   if (!val) return "";
   return STATUS_FR[val] ?? val;
@@ -111,8 +128,8 @@ export function buildSuiviRow(r: SuiviReport): Record<string, unknown> {
       r.autresEntretiens.photos.length,
       r.photosMensuelles.photos.length,
     ].reduce((a, b) => a + b, 0),
-    "Créé le": r.createdAt,
-    "Modifié le": r.updatedAt,
+    "Créé le": formatDate(r.createdAt),
+    "Modifié le": formatDate(r.updatedAt),
   };
 
   // 1.1.1.4 Lectures tensiomètres PLC (colonnes dynamiques par T et Z)
@@ -257,8 +274,8 @@ export function buildPompageRow(t: PompageTest): Record<string, unknown> {
 
     // ── Métadonnées ──────────────────────────────────────────
     "Nb photos (total)": nbPhotos,
-    "Créé le": t.createdAt,
-    "Modifié le": t.updatedAt,
+    "Créé le": formatDate(t.createdAt),
+    "Modifié le": formatDate(t.updatedAt),
   };
 }
 

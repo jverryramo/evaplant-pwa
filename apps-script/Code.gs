@@ -397,13 +397,19 @@ function listRows(sheetName) {
   var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet || sheet.getLastRow() < 2) return [];
-
   var headers  = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
   var dataRows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
-
   return dataRows.map(function(row) {
     var obj = {};
-    headers.forEach(function(h, i) { obj[h] = String(row[i] !== undefined ? row[i] : ""); });
+    headers.forEach(function(h, i) {
+      var val = row[i];
+      // Formater les objets Date en AAAA-MM-JJ HH:MM (fuseau America/Toronto)
+      if (val instanceof Date) {
+        obj[h] = Utilities.formatDate(val, "America/Toronto", "yyyy-MM-dd HH:mm");
+      } else {
+        obj[h] = (val !== undefined && val !== null) ? String(val) : "";
+      }
+    });
     return obj;
   });
 }
